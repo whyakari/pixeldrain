@@ -8,6 +8,7 @@ import (
     "net/http"
     "os"
     "os/exec"
+    "path/filepath"
     "runtime"
     "strings"
 )
@@ -92,8 +93,9 @@ func extractTarGz(src string, target string) error {
     return nil
 }
 
-func pdUpload(pdPath, filePath string) error {
-    cmd := exec.Command(pdPath, "upload", filePath)
+func pdUploadMultiple(pdPath string, files []string) error {
+    args := append([]string{"upload"}, files...)
+    cmd := exec.Command(pdPath, args...)
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     return cmd.Run()
@@ -101,7 +103,7 @@ func pdUpload(pdPath, filePath string) error {
 
 func main() {
     if len(os.Args) != 2 {
-        fmt.Println("Usage: pd <file>")
+        fmt.Println("Usage: uwu <device>")
         os.Exit(1)
     }
 
@@ -121,9 +123,37 @@ func main() {
         }
     }
 
-    file := os.Args[1]
-    fmt.Println("Uploading file:", file)
-    if err := pdUpload("./"+pdBinName, file); err != nil {
+    device := os.Args[1]
+    baseDir := fmt.Sprintf("out/target/product/%s", device)
+
+    patterns := []string{
+        filepath.Join(baseDir, "*.zip"),
+        filepath.Join(baseDir, "dtbo.img"),
+        filepath.Join(baseDir, "vendor_boot.img"),
+        filepath.Join(baseDir, "boot.img"),
+    }
+
+    var uploadFiles []string
+    for _, pattern := range patterns {
+        matches, err := filepath.Glob(pattern)
+        if err != nil {
+            fmt.Println("Erro ao buscar arquivos com padrão:", pattern)
+            continue
+        }
+        if len(matches) == 0 {
+            fmt.Printf("Aviso: Nenhum arquivo encontrado para %s, pulando...\n", pattern)
+            continue
+        }
+        uploadFiles = append(uploadFiles, matches...)
+    }
+
+    if len(uploadFiles) == 0 {
+        fmt.Println("Nenhum arquivo para upload encontrado. Saindo.")
+        os.Exit(0)
+    }
+
+    fmt.Println("Uploading files:", uploadFiles)
+    if err := pdUploadMultiple("./"+pdBinName, uploadFiles); err != nil {
         fmt.Println("Upload failed:", err)
         os.Exit(1)
     }
